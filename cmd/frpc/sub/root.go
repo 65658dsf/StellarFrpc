@@ -71,14 +71,24 @@ var rootCmd = &cobra.Command{
 		if token != "" && len(tunnels) != 0 {
 			log.Infof("正在获取隧道配置...")
 			data := getUserTunnels()
+			var wg sync.WaitGroup
 			for _, tunnel := range tunnels {
 				if v, ok := data[tunnel].(map[string]interface{}); ok {
 					content := v["data"].(string)
-					runClient(content, true)
+					wg.Add(1)
+					time.Sleep(time.Millisecond)
+					go func() {
+						defer wg.Done()
+						err := runClient(content, true)
+						if err != nil {
+							fmt.Printf("隧道启动失败: [%s]\n", tunnel)
+						}
+					}()
 				} else {
 					log.Warnf("此隧道不存在: %s", tunnel)
 				}
 			}
+			wg.Wait()
 		} else {
 			// If cfgDir is not empty, run multiple frpc service for each config file in cfgDir.
 			// Note that it's only designed for testing. It's not guaranteed to be stable.
@@ -110,7 +120,7 @@ func runMultipleClients(cfgDir string, alreadyRead bool) error {
 			defer wg.Done()
 			err := runClient(path, alreadyRead)
 			if err != nil {
-				fmt.Printf("frpc service error for config file [%s]\n", path)
+				fmt.Printf("隧道启动失败: [%s]\n", path)
 			}
 		}()
 		return nil
